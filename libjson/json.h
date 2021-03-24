@@ -2,14 +2,18 @@
 // Created by Michael on 22.03.2021.
 //
 
+//TODO: Add file exporting
 //TODO: Add Beautifying
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <streambuf>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -39,10 +43,9 @@ public:
     }
 
     template<typename T, typename... Args>
-    [[maybe_unused]] static constexpr Unique<T> create_scoped(Args &&...args) {
+    static constexpr Unique<T> create_scoped(Args &&...args) {
         return std::make_unique<T>(std::forward<Args>(args)...);
     }
-
     [[nodiscard]] static Shared<Object> object() { return create<Object>(); }
 
     [[nodiscard]] static Shared<Array> array() { return create<Array>(); }
@@ -70,6 +73,32 @@ public:
         auto parser = create<Parser>(lexer);
 
         return parser->parse_arr();
+    }
+
+    [[nodiscard]] static Shared<Object> object_from_file(const std::string &file_path) {
+        std::ifstream t(file_path);
+        std::string str;
+
+        t.seekg(0, std::ios::end);
+        str.reserve(t.tellg());
+        t.seekg(0, std::ios::beg);
+
+        str.assign((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+
+        return object(str);
+    }
+
+    [[nodiscard]] static Shared<Array> array_from_file(const std::string &file_path) {
+        std::ifstream t(file_path);
+        std::string str;
+
+        t.seekg(0, std::ios::end);
+        str.reserve(t.tellg());
+        t.seekg(0, std::ios::beg);
+
+        str.assign((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+
+        return array(str);
     }
 
 private:
@@ -174,6 +203,8 @@ private:
 
         ~Lexer() { delete[] m_json_raw; }
 
+        [[nodiscard]] char current_char() const { return m_current; }
+
         Token next_token() {
             skip_whitespace();
 
@@ -240,6 +271,11 @@ private:
                     while (m_current != '"') {
                         string << m_current;
 
+                        if (m_current == '\\' && peek() == '"') {
+                            string << "\"";
+                            next();
+                        }
+
                         next();
                     }
                     next();
@@ -251,7 +287,6 @@ private:
 
             return Token();
         }
-
     private:
         void skip_whitespace() {
             while (m_current == '\t' || m_current == ' ' || m_current == '\r' || m_current == '\n') { next(); }

@@ -7,26 +7,8 @@
 #include <iostream>
 
 int main(int, const char **) {
-    auto parsed = JSON::object(R"(
-{
-  "key3": "value3",
-  "key1": [
-    0.01,
-    false,
-    null
-  ],
-  "key2": {
-    "key3": [
-      {
-        "a": 2
-      },
-      {
-        "a": 3
-      }
-    ]
-  }
-})");
+    auto parsed = JSON::object_from_file(R"(F:\Projects\CPPJson\example.json)");
 
-    std::cout << parsed->get_array("key1")->get_float(6) << std::endl;
+    std::cout << parsed->dump(false);
     return 0;
 }

@@ -2,9 +2,6 @@
 // Created by Michael on 22.03.2021.
 //
 
-//TODO: Add file exporting
-//TODO: Add Beautifying
-
 #pragma once
 
 #include <algorithm>
@@ -26,11 +23,6 @@ private:
 
     class Dumpable;
 
-public:
-    class Object;
-    class Array;
-    class Literal;
-
     template<typename T>
     using Shared = std::shared_ptr<T>;
 
@@ -46,6 +38,12 @@ public:
     static constexpr Unique<T> create_scoped(Args &&...args) {
         return std::make_unique<T>(std::forward<Args>(args)...);
     }
+
+public:
+    class Object;
+    class Array;
+    class Literal;
+
     [[nodiscard]] static Shared<Object> object() { return create<Object>(); }
 
     [[nodiscard]] static Shared<Array> array() { return create<Array>(); }
@@ -101,15 +99,35 @@ public:
         return array(str);
     }
 
+    static void set_indentation_chars(const std::string &indentation) { m_indententation_chars = indentation; }
+
+    static const std::string &get_indentation_chars() { return m_indententation_chars; }
+
 private:
+    inline static std::string m_indententation_chars{"  "};// NOLINT(cert-err58-cpp)
+
+    [[nodiscard]] static std::string repeat(uint32_t amount, const std::string &string) {
+        std::stringstream result;
+        for (uint32_t i = 0; i < amount; i++) result << string;
+        return result.str();
+    }
+
     class Dumpable {
     public:
         virtual ~Dumpable() = default;
 
-        virtual std::string dump(bool beautify) { return ""; }
-    };
+        virtual std::string dump(bool beautify) = 0;
 
-    static inline constexpr bool ishex(int c) { return (c >= 0x30 && c <= 0x39) || (c >= 0x61 && c <= 0x66) || (c >= 0x41 && c <= 0x46); }
+        void dump_to_file(const std::string &path, bool beatify = false) {
+            std::ofstream file;
+            file.open(path);
+            file << dump(beatify);
+            file.close();
+        }
+
+    protected:
+        inline static uint32_t m_indent_level = 0;
+    };
 
     class Token {
     public:
@@ -175,13 +193,6 @@ private:
             return string.str();
         }
 
-        std::string to_string() {
-            std::stringstream string;
-            string << to_string(m_token_type);
-            string << "[Raw: '" << m_raw << "']";
-            return string.str();
-        }
-
         [[nodiscard]] Type token_type() const { return m_token_type; }
         [[maybe_unused]] [[nodiscard]] const std::string &raw() const { return m_raw; }
 
@@ -189,7 +200,6 @@ private:
         std::string m_raw;
         Type m_token_type;
     };
-
     class Lexer {
     public:
         explicit Lexer(const std::string &json_raw) {
@@ -202,8 +212,6 @@ private:
         }
 
         ~Lexer() { delete[] m_json_raw; }
-
-        [[nodiscard]] char current_char() const { return m_current; }
 
         Token next_token() {
             skip_whitespace();
@@ -287,6 +295,7 @@ private:
 
             return Token();
         }
+
     private:
         void skip_whitespace() {
             while (m_current == '\t' || m_current == ' ' || m_current == '\r' || m_current == '\n') { next(); }
@@ -340,7 +349,6 @@ private:
         char m_current{0};
         int m_current_index{-1};
     };
-
     class Parser {
     public:
         explicit Parser(Shared<Lexer> lexer) : m_lexer(std::move(lexer)) {}
@@ -348,13 +356,13 @@ private:
         Shared<JSON::Object> parse_obj() {
             m_current_token = m_lexer->next_token();
             if (m_current_token == Token::Type::CurlyOpen) return parse_object();
-            return nullptr;
+            return JSON::object();
         }
 
         Shared<JSON::Array> parse_arr() {
             m_current_token = m_lexer->next_token();
             if (m_current_token == Token::Type::SquareOpen) return parse_array();
-            return nullptr;
+            return JSON::array();
         }
 
     private:
@@ -510,16 +518,23 @@ public:
         ~Object() override = default;
 
         std::string dump(bool beautify) override {
+            m_indent_level++;
             std::stringstream result;
             result << "{";
+            if (beautify) result << "\n";
             size_t i = 0;
             for (auto &property : m_properties) {
                 i++;
+                if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
                 result << "\"" << property.first << "\"";
                 result << ":";
+                if (beautify) result << " ";
                 result << property.second->dump(beautify);
                 if (i != size()) result << ",";
+                if (beautify) result << "\n";
             }
+            m_indent_level--;
+            if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
             result << "}";
             return result.str();
         }
@@ -532,7 +547,7 @@ public:
 
         template<typename T>
         Shared<T> get(const std::string &name) {
-            if (m_properties.find(name) == m_properties.end()) return nullptr;
+            if (!has(name)) return nullptr;
 
             if (std::is_base_of_v<Dumpable, T>) { return std::static_pointer_cast<T>(m_properties[name]); }
             return nullptr;
@@ -542,6 +557,8 @@ public:
         Shared<JSON::Object> get_object(const std::string &name) { return get<JSON::Object>(name); }
         Shared<JSON::Array> get_array(const std::string &name) { return get<JSON::Array>(name); }
 
+        [[nodiscard]] bool has(const std::string &name) const { return m_properties.find(name) != m_properties.end(); }
+
         int get_int(const std::string &name) {
             auto literal = get_literal(name);
             if (!literal) return 0;
@@ -549,6 +566,7 @@ public:
             if (literal->is_int()) return literal->as_int();
             return 0;
         }
+
         float get_float(const std::string &name) {
             auto literal = get_literal(name);
             if (!literal) return 0.0f;
@@ -590,13 +608,19 @@ public:
         ~Array() override = default;
 
         std::string dump(bool beautify) override {
+            m_indent_level++;
             std::stringstream result;
             result << "[";
+            if (beautify) result << "\n";
             for (size_t i = 0; i < count(); i++) {
+                if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
                 result << m_values[i]->dump(beautify);
 
                 if (i != count() - 1) { result << ","; }
+                if (beautify) result << "\n";
             }
+            m_indent_level--;
+            if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
             result << "]";
             return result.str();
         }

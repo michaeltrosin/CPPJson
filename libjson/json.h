@@ -16,6 +16,12 @@
 #include <utility>
 #include <vector>
 
+std::string operator*(const std::string &str, uint32_t amount) {
+    std::stringstream result;
+    for (size_t i = 0; i < amount; i++) { result << str; }
+    return result.str();
+}// compact
+
 class JSON {
 private:
     class Parser;
@@ -105,12 +111,6 @@ public:
 
 private:
     inline static std::string m_indententation_chars{"  "};// NOLINT(cert-err58-cpp)
-
-    [[nodiscard]] static std::string repeat(uint32_t amount, const std::string &string) {
-        std::stringstream result;
-        for (uint32_t i = 0; i < amount; i++) result << string;
-        return result.str();
-    }
 
     class Dumpable {
     public:
@@ -525,7 +525,7 @@ public:
             size_t i = 0;
             for (auto &property : m_properties) {
                 i++;
-                if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
+                if (beautify) { result <<  (JSON::m_indententation_chars * m_indent_level); }
                 result << "\"" << property.first << "\"";
                 result << ":";
                 if (beautify) result << " ";
@@ -534,7 +534,7 @@ public:
                 if (beautify) result << "\n";
             }
             m_indent_level--;
-            if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
+            if (beautify) { result <<  (JSON::m_indententation_chars * m_indent_level); }
             result << "}";
             return result.str();
         }
@@ -613,14 +613,14 @@ public:
             result << "[";
             if (beautify) result << "\n";
             for (size_t i = 0; i < count(); i++) {
-                if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
+                if (beautify) { result <<  (JSON::m_indententation_chars * m_indent_level); }
                 result << m_values[i]->dump(beautify);
 
                 if (i != count() - 1) { result << ","; }
                 if (beautify) result << "\n";
             }
             m_indent_level--;
-            if (beautify) { result << repeat(m_indent_level, JSON::m_indententation_chars); }
+            if (beautify) { result << (JSON::m_indententation_chars * m_indent_level); }
             result << "]";
             return result.str();
         }

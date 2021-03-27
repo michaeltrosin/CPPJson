@@ -7,8 +7,6 @@ set(CMAKE_EXE_LINKER_FLAGS " -static")
 
 # add_compile_definitions(BUILD_DEBUG)
 
-#add_library(Json)
-add_executable(JsonTest libjson/json.h test.cpp)
+add_library(Json libjson/json.h)
 
-target_link_libraries(JsonTest -static-libgcc -static-libstdc++)
-#target_link_libraries(JsonTest Json)
+set_target_properties(Json PROPERTIES LINKER_LANGUAGE CXX)
